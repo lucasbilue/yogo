@@ -38,6 +38,12 @@ def test_demo_over_bus_honours_explicit_states(monkeypatch, tmp_path):
     assert seen == ["waiting", "done"]
 
 
+def test_demo_rejects_unknown_state(monkeypatch, capsys):
+    monkeypatch.setattr(dmn, "daemon_pid", lambda: 4242)
+    assert cli.main(["-q", "demo", "waiting", "napping"]) == 2
+    assert "napping" in capsys.readouterr().err
+
+
 def test_demo_direct_uses_daemon_renderers(monkeypatch):
     """Without a daemon it must paint with the very same renderers."""
     monkeypatch.setattr(dmn, "daemon_pid", lambda: None)

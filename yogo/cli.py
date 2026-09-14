@@ -248,6 +248,11 @@ def cmd_demo(args) -> int:
       so the picture is identical either way.
     """
     states = args.states or list(bus.STATES)
+    bad = [s for s in states if s not in bus.STATES]
+    if bad:
+        print(f"error: unknown state {', '.join(bad)}; expected one of "
+              f"{', '.join(bus.STATES)}", file=sys.stderr)
+        return 2
     hold = max(args.hold, 0.0)
     via_bus = dmn.daemon_pid() is not None
 
@@ -453,8 +458,11 @@ def build_parser() -> argparse.ArgumentParser:
 
     s = sub.add_parser("demo", help="cycle through every notification state, idle to error",
                        parents=[common])
-    s.add_argument("states", nargs="*", choices=list(bus.STATES), metavar="STATE",
-                   help="which states, in order (default: all, idle first)")
+    # No `choices=` here: on Python < 3.12 argparse rejects an empty nargs="*"
+    # positional that has choices ("invalid choice: []"). cmd_demo validates.
+    s.add_argument("states", nargs="*", metavar="STATE",
+                   help=f"which states, in order (default: all, idle first); "
+                        f"one of {', '.join(bus.STATES)}")
     s.add_argument("--hold", type=float, default=2.0, help="seconds per state (default 2)")
     s.add_argument("--loop", action="store_true", help="repeat until Ctrl-C")
     s.add_argument("--idle", choices=["off", "breathe"], default="breathe",
