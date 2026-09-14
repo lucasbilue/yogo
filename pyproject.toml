@@ -1,0 +1,54 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "yogo"
+version = "0.1.0"
+description = "Drive the 6x6 RGB display on an ATK Yogo 75 PRO keyboard over USB HID"
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+requires-python = ">=3.10"
+authors = [{ name = "rossgpt" }]
+keywords = ["atk", "yogo", "keyboard", "hid", "rgb", "display", "claude-code", "hermes"]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Environment :: Console",
+  "Intended Audience :: Developers",
+  "Operating System :: MacOS",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "Topic :: System :: Hardware :: Universal Serial Bus (USB) :: Human Interface Device (HID)",
+]
+dependencies = ["hid", "Pillow", "psutil"]
+
+[project.optional-dependencies]
+dev = ["pytest", "ruff"]
+
+[project.urls]
+Homepage = "https://github.com/rossgpt/yogo"
+Issues = "https://github.com/rossgpt/yogo/issues"
+
+[project.scripts]
+yogo = "yogo.cli:main"
+
+[tool.setuptools]
+packages = ["yogo"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+extend-exclude = [".venv"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+ignore = ["E501"]
+
+[tool.ruff.lint.per-file-ignores]
+# One-off investigation scripts kept for the record, not maintained code.
+"tools/*" = ["B", "UP", "E702"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"

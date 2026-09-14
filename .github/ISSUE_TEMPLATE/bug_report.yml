@@ -1,0 +1,31 @@
+name: Bug report
+description: Something does not work as documented
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What you ran, what you expected, and what you saw instead. Paste terminal output as text.
+    validations:
+      required: true
+  - type: input
+    id: keyboard
+    attributes:
+      label: Keyboard and connection
+      placeholder: "Yogo 75 PRO, wired (PID 0x119B)"
+    validations:
+      required: true
+  - type: input
+    id: env
+    attributes:
+      label: Environment
+      description: Output of `sw_vers -productVersion`, `python3 --version`, and whether ATK HUB was running.
+      placeholder: "macOS 26.0, Python 3.14.3, ATK HUB quit"
+    validations:
+      required: true
+  - type: textarea
+    id: info
+    attributes:
+      label: Output of `./bin/yogo info`
+      render: shell

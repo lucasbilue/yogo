@@ -1,0 +1,25 @@
+#!/bin/sh
+# Publish a display state from any harness.
+#
+#   yogo-signal <source> <state> [ttl-seconds]
+#   yogo-signal claude-code thinking
+#   yogo-signal my-ci-job error 60
+#
+# States: idle thinking tool waiting done error
+#
+# Deliberately plain POSIX shell with no interpreter start-up, because some
+# producers call this on every tool invocation. It omits "ts" on purpose: the
+# bus falls back to the file's mtime, which is sub-second precise, whereas
+# `date +%s` on macOS is whole seconds only.
+[ -n "$2" ] || { echo "usage: yogo-signal <source> <state> [ttl]" >&2; exit 2; }
+src=$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]' | tr -cs 'a-z0-9_-' '-')
+case "$2" in
+  idle|thinking|tool|waiting|done|error) ;;
+  *) echo "yogo-signal: unknown state '$2'" >&2; exit 2 ;;
+esac
+d="${YOGO_HOME:-$HOME/.yogo}/sources"
+[ -d "$d" ] || mkdir -p "$d" 2>/dev/null
+t="$d/.$src.$$.tmp"
+printf '{"state":"%s","ttl":%s,"label":"%s"}' "$2" "${3:-900}" "$src" > "$t" 2>/dev/null \
+  && mv -f "$t" "$d/$src.json" 2>/dev/null
+exit 0

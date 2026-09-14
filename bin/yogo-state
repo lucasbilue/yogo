@@ -1,0 +1,4 @@
+#!/bin/sh
+# Deprecated: kept so anything still calling it keeps working.
+# Use `yogo-signal <source> <state>` instead.
+exec "$(dirname "$0")/yogo-signal" claude-code "$1"

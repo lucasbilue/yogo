@@ -1,0 +1,15 @@
+name: Feature request
+description: Suggest an addition, such as a new harness adapter or display effect
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What would you like to do that you cannot today?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: How might it work?
+      description: For a new adapter, name the harness and its lifecycle hooks. See adapters/README.md.
