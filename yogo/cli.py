@@ -235,6 +235,68 @@ def cmd_text(args) -> int:
 
 
 
+def cmd_demo(args) -> int:
+    """Cycle through every notification state so you can see each animation.
+
+    Two routes to the glass, chosen automatically:
+
+    - daemon running: publish each state to the bus as source ``demo`` and let
+      the daemon render it, exactly as a harness would. Another producer in a
+      higher-priority state (say Claude Code asking for permission) will win
+      over the demo, and that is reported rather than fought.
+    - no daemon: open the device and render with the daemon's own renderers,
+      so the picture is identical either way.
+    """
+    states = args.states or list(bus.STATES)
+    hold = max(args.hold, 0.0)
+    via_bus = dmn.daemon_pid() is not None
+
+    def announce(state: str, note: str = "") -> None:
+        if not args.quiet:
+            print(f"{state:9}{note}", flush=True)
+
+    if via_bus:
+        try:
+            while True:
+                for st in states:
+                    bus.emit("demo", st, ttl=max(hold, 1.0) + 2.0)
+                    shown, _, win = bus.arbitrate()
+                    note = ""
+                    if st == "idle" and shown != "idle":
+                        note = f"   (bus not idle: display shows {shown} from {win.source})"
+                    elif st != "idle" and (win is None or win.source != "demo"):
+                        note = f"   (pre-empted: display shows {shown} from {win.source if win else '?'})"
+                    announce(st, note)
+                    time.sleep(hold)
+                if not args.loop:
+                    break
+        except KeyboardInterrupt:
+            pass
+        finally:
+            bus.clear("demo")
+        return 0
+
+    dt = 1.0 / max(args.fps, 1.0)
+    with _open(args) as dev:
+        try:
+            while True:
+                for st in states:
+                    announce(st)
+                    renderer = dmn.RENDERERS.get(st)
+                    t0 = time.time()
+                    while (el := time.time() - t0) < hold:
+                        frame = renderer(el) if renderer else dmn.render_idle(el, args.idle)
+                        dev.show(frame.scaled(args.brightness).pixels)
+                        time.sleep(dt)
+                if not args.loop:
+                    break
+        except KeyboardInterrupt:
+            pass
+        dev.show(Frame().pixels)
+        dev._streaming = False
+    return 0
+
+
 def cmd_daemon(args) -> int:
     """Own the display and animate whatever state the state file names."""
     if args.stop:
@@ -388,6 +450,18 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--no-finale", dest="finale", action="store_false",
                    help="skip the closing flourish")
     s.set_defaults(fn=cmd_text)
+
+    s = sub.add_parser("demo", help="cycle through every notification state, idle to error",
+                       parents=[common])
+    s.add_argument("states", nargs="*", choices=list(bus.STATES), metavar="STATE",
+                   help="which states, in order (default: all, idle first)")
+    s.add_argument("--hold", type=float, default=2.0, help="seconds per state (default 2)")
+    s.add_argument("--loop", action="store_true", help="repeat until Ctrl-C")
+    s.add_argument("--idle", choices=["off", "breathe"], default="breathe",
+                   help="idle look when rendering directly (a running daemon "
+                        "uses its own --idle setting)")
+    s.add_argument("--fps", type=float, default=15.0)
+    s.set_defaults(fn=cmd_demo)
 
     s = sub.add_parser("daemon", help="run the display daemon for Claude Code hooks",
                        parents=[common])

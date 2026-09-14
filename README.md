@@ -25,6 +25,7 @@ python3 -m venv .venv && ./.venv/bin/pip install hid Pillow psutil
 ./bin/yogo text 'RossGPT'           # spell it out, a letter at a time
 ./bin/yogo rainbow                  # animated hue sweep
 ./bin/yogo cpu                      # live scrolling CPU meter
+./bin/yogo demo                     # tour every notification state, 2 s each
 ./bin/yogo clear
 ```
 
@@ -69,6 +70,12 @@ contract, arbitration rules and a guide to writing another one are in
 | `done` | green bloom, then fading glow | finished |
 | `error` | red double-flash | failed |
 | `idle` | off, a dim blue breathe, or the keyboard's built-in animation (`--idle firmware`) | between sessions |
+
+To see them all in sequence run `./bin/yogo demo` — it walks
+idle → thinking → tool → waiting → done → error at 2 s each (`--hold`,
+`--loop`, or name the states you want). With the daemon running it signals
+over the bus like any other producer; without it, it opens the device and
+draws with the same renderers.
 
 When producers disagree, the highest priority wins —
 `error` › `waiting` › `done` › `tool` › `thinking` › `idle` — so an agent
