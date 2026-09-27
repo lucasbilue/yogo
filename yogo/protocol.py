@@ -3,8 +3,9 @@ Wire protocol for the ATK Yogo 75 PRO 6x6 RGB "dot screen".
 
 The keyboard speaks a VIA-style protocol over a QMK-style raw-HID interface;
 the dot-screen commands are vendor extensions. Everything here was verified
-against a Yogo 75 PRO over USB; the 2.4 GHz dongle and Bluetooth values are
-untested.
+against a Yogo 75 PRO over USB and the 2.4 GHz dongle. Bluetooth support is
+written but unused: the current firmware does not expose the vendor
+collection over Bluetooth.
 
 Bluetooth
 ---------
@@ -43,7 +44,7 @@ LINK_ORDER = (LINK_USB, LINK_DONGLE, LINK_BLUETOOTH)   # preferred first
 # productId -> (label, link)
 PRODUCTS = {
     0x119B: ("YOGO 75 PRO", LINK_USB),
-    0x11FF: ("YOGO 75 PRO 2.4G", LINK_DONGLE),   # untested
+    0x11FF: ("YOGO 75 PRO 2.4G", LINK_DONGLE),   # verified, 32 B reports
 }
 
 # Over Bluetooth the VID/PID come from the GATT PnP ID characteristic and are

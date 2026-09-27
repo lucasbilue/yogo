@@ -3,8 +3,8 @@
 [![CI](https://github.com/rossgpt/yogo/actions/workflows/ci.yml/badge.svg)](https://github.com/rossgpt/yogo/actions/workflows/ci.yml) [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE) ![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue)
 
 A small Python library and CLI for the pixel display on the ATK Yogo 75 PRO
-keyboard, talking to it directly over HID — USB, and (experimentally)
-Bluetooth. No ATK HUB required.
+keyboard, talking to it directly over HID, by USB cable or the 2.4 GHz
+receiver. No ATK HUB required.
 
 The wire format was worked out and verified against the hardware, and is
 documented in full below. Tested only on the Yogo 75 PRO.
@@ -20,7 +20,7 @@ python3 -m venv .venv && ./.venv/bin/pip install hid Pillow psutil
 
 ```sh
 ./bin/yogo info                     # device, link, screen mode, battery
-./bin/yogo probe                    # what's exposed on USB / 2.4GHz / Bluetooth
+./bin/yogo probe                    # which links can drive the display
 ./bin/yogo solid '#ff0055'          # fill with a colour
 ./bin/yogo image ~/pic.png          # downscale any image to 6×6
 ./bin/yogo pixels red green blue …  # all 36 pixels, row-major from top-left
@@ -46,49 +46,30 @@ with YogoDisplay.open_first() as dev:
     dev.write_image(f.pixels)           # persistent (writes flash)
 ```
 
-## Bluetooth
+## Wireless
 
-Bluetooth support is **experimental**: the code is written and tested against
-a simulated keyboard, but has not yet been confirmed on real hardware. Nothing
-changes in how you use it — pair the keyboard, flip the mode switch to BT, and
-the daemon, CLI and Claude Code hooks work as they do over USB.
+**2.4 GHz receiver: works.** Plug in the receiver, set the mode switch to the
+receiver position, and the daemon, CLI and Claude Code hooks work exactly as
+they do over USB. Verified on a Yogo 75 PRO: the receiver exposes the same
+`0xFF60/0x61` interface with 32-byte reports (24-byte payload), and config
+reads and writes are chunked to fit.
 
-Check first:
+**Bluetooth: not supported by the keyboard.** Over Bluetooth the firmware
+only presents keyboard, mouse, system-control and media-key collections
+(usage pairs `1/6`, `1/2`, `1/1`, `1/128`, `12/1`). There is no `0xFF60`
+collection, so the display cannot be driven over Bluetooth by any host-side
+software. The Bluetooth transport code is kept in case a future firmware
+adds it, and `yogo probe` will show it if that happens.
+
+Check what your keyboard exposes on each link:
 
 ```
 ./bin/yogo probe
 ```
 
-It lists every HID interface the keyboard exposes on each link and runs a
-harmless handshake against the display one. What you want to see is a line
-marked `<- display interface` with `bus=BLUETOOTH`, then `handshake : OK`.
-If the keyboard shows up over Bluetooth but no display interface does, the
-firmware simply does not expose the screen over Bluetooth, and no host-side
-code can change that — use USB or the 2.4 GHz dongle instead.
-
-How it works:
-
-- **Discovery** matches the `0xFF60/0x61` interface on any bus, by vendor ID or,
-  since BLE IDs come from the GATT PnP ID and may differ from USB, by the
-  `Yogo` product name. USB wins when both are present; `YOGO_LINK=bluetooth`
-  overrides that. If USB is held (e.g. by ATK HUB), Bluetooth is tried next.
-- **Framing** is learned, not guessed. Over BLE the vendor collection lives in
-  one shared report map, so it usually has a report ID and may use shorter
-  reports. The report descriptor gives both (needs hidapi ≥ 0.14, which
-  Homebrew ships); failing that, the handshake is tried with each common
-  framing until the keyboard answers `0x55`. The winner is cached per
-  connection so a wake from sleep reconnects quickly.
-- **Replies** are matched by sequence number on wireless links, so a reply
-  that arrives late isn't mistaken for the next one's.
-- **Pacing**: the daemon caps itself at 10 fps over Bluetooth (the 72-byte
-  frame takes several round trips) — still well inside the ~1 s before the
-  firmware reclaims the screen.
-- Config reads and writes are chunked to the report size, which also fixes
-  the 2.4 GHz dongle path.
-
-Expect some extra battery drain while the daemon is streaming over
-Bluetooth, and a few seconds' delay when the keyboard wakes from sleep and
-the daemon reconnects.
+A line marked `<- display interface` followed by `handshake : OK` means that
+link can drive the display. When both USB and the receiver are connected, USB
+is used; `YOGO_LINK=2.4GHz` overrides that.
 
 ## Harness integration
 
@@ -164,7 +145,7 @@ Never drive an animation through `0x3B`; it would wear the flash out.
 ## Protocol
 
 **Transport.** USB HID, VID `0x373B`, PID `0x119B` (`0x11FF` for the 2.4 GHz
-dongle, which is untested; Bluetooth IDs are taken as the OS reports them). Usage page `0xFF60`, usage `0x61` — the QMK `raw_hid` descriptor,
+dongle, verified with 32-byte reports; Bluetooth does not expose this interface). Usage page `0xFF60`, usage `0x61` — the QMK `raw_hid` descriptor,
 though the firmware is not QMK. Unnumbered 64-byte reports (prepend a `0x00`
 report-id byte for hidapi). Over the dongle the report is 32 bytes with a
 24-byte payload.
