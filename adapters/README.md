@@ -157,3 +157,46 @@ display without touching Synapse at all: it polls the local dashboard API
 The most urgent item wins. Items already finished when the sidecar starts are
 ignored, and every signal carries the sidecar's pid, so stopping it clears
 the display. `--url` or `SYNAPSE_WORK_URL` points it at another address.
+
+## Claude in Chrome (claude.ai)
+
+`adapters/claude-web/` lights the display while Claude replies in an ordinary
+claude.ai chat in Chrome. It shows cyan `thinking` while a reply streams and
+green `done` when it finishes. There is no amber `waiting`, because a chat has
+no permission prompts to wait on.
+
+It has two parts. A Chrome extension watches each claude.ai tab, and a local
+listener publishes what it reports on the bus as `claude-web-<tab>`:
+
+```
+claude.ai tab ──▶ content.js ──▶ background.js ──POST──▶ bin/yogo-web ──▶ bus
+               polls every 500 ms   adds the tab id      127.0.0.1:7437
+```
+
+Start the listener, then load the extension once:
+
+```
+./bin/yogo-web              # Ctrl-C to stop; -v logs each signal, --port to move it
+```
+
+1. Open `chrome://extensions` and turn on **Developer mode**.
+2. Click **Load unpacked** and pick `adapters/claude-web/extension`.
+
+The extension counts a tab as replying when the page has an element with
+`[data-is-streaming="true"]` or shows a visible button whose `aria-label`
+contains "Stop". While a reply runs it re-sends `thinking` every 60 s, so the
+120 s TTL doesn't expire on long answers. Closing a tab clears its source, and
+stopping the listener drops every signal it wrote, since they all carry its
+pid.
+
+The listener only accepts `POST /signal` requests that carry `X-Yogo: 1` and
+have no `Origin` header, or a `chrome-extension://` one. Any web page can send
+a request to localhost, and this check stops a page from faking a signal.
+
+Limits:
+
+- **It reads the page.** A claude.ai redesign can break detection until the
+  selectors are updated. They're in one `SELECTORS` constant at the top of
+  `extension/content.js`.
+- **Chrome only, not the Claude desktop app.** The desktop app can't load
+  extensions.

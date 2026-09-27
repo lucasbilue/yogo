@@ -81,6 +81,8 @@ Working adapters: **Claude Code** (hooks) and **Hermes** (plugin). The full
 contract, arbitration rules and a guide to writing another one are in
 [`adapters/README.md`](adapters/README.md).
 
+For claude.ai chats in Chrome, run `./bin/yogo-web` and load the unpacked extension in `adapters/claude-web/extension`: cyan while Claude replies, green when it's done.
+
 ```sh
 ./bin/yogo daemon --idle breathe    # start the renderer (detaches)
 ./bin/yogo daemon --idle firmware   # …or let the keyboard's own animation play when idle

@@ -1,0 +1,17 @@
+{
+  "manifest_version": 3,
+  "name": "Yogo display for claude.ai",
+  "version": "0.1.0",
+  "description": "Lights the Yogo 75 PRO dot screen while Claude replies in a claude.ai chat.",
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://claude.ai/*"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "host_permissions": ["http://127.0.0.1:7437/*"]
+}

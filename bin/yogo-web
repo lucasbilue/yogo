@@ -1,0 +1,8 @@
+#!/bin/sh
+# Show claude.ai chat activity on the Yogo display (local listener for the
+# Chrome extension in adapters/claude-web/extension).
+#   yogo-web                listen on 127.0.0.1:7437 (Ctrl-C to stop)
+#   yogo-web -v --port N    log each signal, use another port
+DIR=$(cd "$(dirname "$0")/.." && pwd)
+PY="$DIR/.venv/bin/python"; [ -x "$PY" ] || PY=python3
+exec "$PY" "$DIR/adapters/claude-web/listener.py" "$@"
