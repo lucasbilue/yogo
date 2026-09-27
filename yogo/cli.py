@@ -77,12 +77,80 @@ def cmd_info(args) -> int:
                   f"host drives it, 0x00 at rest)")
             print(f"  geometry    : {p.WIDTH}x{p.HEIGHT} = {p.PIXELS} RGB pixels, "
                   f"row-major from top-left")
-            print(f"  report      : {dev.buffer_len}B, {dev.max_data}B payload")
+            rid = f", report ID {dev.report_id}" if dev.report_id else ""
+            print(f"  link        : {dev.link}")
+            print(f"  report      : {dev.buffer_len}B, {dev.max_data}B payload{rid}")
             info = dev.power_info()
             if info:
                 print(f"  battery     : {info['percent']}%"
                       f"{' charging' if info['charging'] else ''}")
     return 0
+
+
+def cmd_probe(args) -> int:
+    """List every Yogo HID interface the OS exposes, and test the display one.
+
+    Opens nothing but the 0xFF60 interface and sends only the harmless
+    session handshake and a battery read.
+    """
+    import hid
+
+    if dmn.daemon_pid() is not None:
+        print("note: the daemon is running and holds the display; stop it for "
+              "a full probe (./bin/yogo daemon --stop)\n")
+
+    rows, seen = [], set()
+    for d in [*hid.enumerate(p.VENDOR_ID, 0), *hid.enumerate(0, 0)]:
+        name = (d.get("product_string") or "")
+        if d["path"] in seen:
+            continue
+        if d.get("vendor_id") != p.VENDOR_ID and p.PRODUCT_NAME_HINT not in name.lower():
+            continue
+        seen.add(d["path"])
+        rows.append(d)
+
+    if not rows:
+        print("no HID interfaces from ATK (VID 0x373B) or named 'Yogo' are visible.\n"
+              "  - over Bluetooth: pair it (Fn+1/2/3, hold 3 s) and put the mode "
+              "switch on BT\n  - check System Settings > Bluetooth shows it connected")
+        return 1
+
+    for d in rows:
+        bus_type = d.get("bus_type")
+        bus = getattr(bus_type, "name", None) or ("?" if bus_type is None else str(bus_type))
+        raw = d["usage_page"] == p.RAW_USAGE_PAGE and d["usage"] == p.RAW_USAGE
+        print(f"{d['vendor_id']:04X}:{d['product_id']:04X}  bus={bus:<9} "
+              f"usage={d['usage_page']:04X}/{d['usage']:02X}  "
+              f"{d.get('product_string') or ''}{'   <- display interface' if raw else ''}")
+
+    displays = YogoDisplay.discover()
+    if not displays:
+        print("\nno 0xFF60/0x61 display interface on any link. If the keyboard is "
+              "on Bluetooth\nand listed above, its firmware does not expose the "
+              "display over Bluetooth;\nonly USB (or the 2.4 GHz dongle) can "
+              "drive it.")
+        return 1
+
+    status = 0
+    for d in displays:
+        print(f"\n{d!r}")
+        try:
+            with d.open() as dev:
+                layout = dev._descriptor_layout()
+                if layout:
+                    print(f"  descriptor : report ID {layout['report_id']}, out "
+                          f"{layout['output_len']}B, in {layout['input_len']}B")
+                else:
+                    print("  descriptor : not available (framing found by probing)")
+                rid = f", report ID {dev.report_id}" if dev.report_id else ""
+                print(f"  framing    : {dev.buffer_len}B reports{rid}")
+                info = dev.power_info()
+                print("  handshake  : OK" + (f", battery {info['percent']}%"
+                                             if info else ""))
+        except Exception as e:
+            status = 1
+            print(f"  failed     : {e}")
+    return status
 
 
 def cmd_solid(args) -> int:
@@ -423,6 +491,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     sub.add_parser("info", help="show device, screen mode and battery",
                    parents=[common]).set_defaults(fn=cmd_info)
+    sub.add_parser("probe", help="list the keyboard's HID interfaces on every link "
+                   "(USB, 2.4GHz, Bluetooth) and test the display one",
+                   parents=[common]).set_defaults(fn=cmd_probe)
     sub.add_parser("clear", help="turn every pixel off",
                    parents=[common]).set_defaults(fn=cmd_clear)
 

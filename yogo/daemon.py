@@ -30,6 +30,12 @@ RUNTIME_DIR = bus.RUNTIME_DIR
 PID_FILE = bus.PID_FILE
 STATES = bus.STATES
 
+# A streamed frame is 72 bytes: two reports over USB, three or more over
+# Bluetooth, each waiting on a reply that rides the BLE connection interval.
+# 10 fps keeps comfortably inside the ~1 s before the firmware reclaims the
+# screen while leaving the radio (and the battery) some slack.
+BLUETOOTH_MAX_FPS = 10.0
+
 
 def _hsv(h: float, s: float, v: float):
     r, g, b = colorsys.hsv_to_rgb(h % 1.0, max(0.0, min(1.0, s)),
@@ -164,7 +170,7 @@ def run(fps: float = 15.0, idle_style: str = "off", brightness: float = 1.0,
     signal.signal(signal.SIGINT, _stop)
 
     dev = None
-    dt = 1.0 / max(fps, 1.0)
+    base_dt = dt = 1.0 / max(fps, 1.0)
     next_retry = 0.0
     last_desc = None
     idle_since = time.monotonic()
@@ -193,6 +199,11 @@ def run(fps: float = 15.0, idle_style: str = "off", brightness: float = 1.0,
                     continue
                 try:
                     dev = YogoDisplay.open_first()
+                    dt = base_dt
+                    if dev.link == p.LINK_BLUETOOTH:
+                        dt = max(base_dt, 1.0 / BLUETOOTH_MAX_FPS)
+                    if verbose:
+                        print(f"opened {dev!r} at {1 / dt:.0f} fps", flush=True)
                 except Exception as e:
                     # Broad on purpose: hid.HIDException is not an OSError, and
                     # "exclusive access and device already open" (ATK HUB, or
@@ -227,7 +238,9 @@ def run(fps: float = 15.0, idle_style: str = "off", brightness: float = 1.0,
                 next_retry = now + 2.0
                 continue
 
-            time.sleep(dt)
+            # Sleep only what is left of the frame: a slow link (Bluetooth)
+            # already spent part of it waiting on replies.
+            time.sleep(max(0.0, dt - (time.monotonic() - now)))
     finally:
         if dev is not None:
             try:
