@@ -134,3 +134,26 @@ hermes plugins enable yogo-display
 Decline the tool-override prompt — this plugin registers hooks only, never
 tools, so it does not need that privilege. It maps `clarify`-style tools to
 `waiting` rather than `tool`, since a question to the user is not work.
+
+## Synapse (read-only sidecar)
+
+`adapters/synapse/yogo_synapse.py` mirrors Synapse work-item status onto the
+display without touching Synapse at all: it polls the local dashboard API
+(`GET http://127.0.0.1:3000/api/work`) and publishes on the bus.
+
+```
+./bin/yogo-synapse --dump   # show what it sees and would display; changes nothing
+./bin/yogo-synapse -v       # run it (Ctrl-C to stop)
+```
+
+| Synapse work status | Display |
+|---|---|
+| `assigned`, `starting`, `working` | thinking |
+| `waiting`, `blocked` (`--no-blocked` to skip) | waiting |
+| newly `done` | done |
+| newly `failed` | error |
+| anything else | ignored |
+
+The most urgent item wins. Items already finished when the sidecar starts are
+ignored, and every signal carries the sidecar's pid, so stopping it clears
+the display. `--url` or `SYNAPSE_WORK_URL` points it at another address.
