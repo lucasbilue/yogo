@@ -106,3 +106,90 @@ def test_run_against_fake_synapse(sources):
     assert history == [("synapse", "thinking"), ("synapse", "waiting"),
                        ("synapse-events", "done"), ("synapse", "idle")]
     assert not list(sources.glob("synapse*.json"))           # cleaned up on exit
+
+
+def agent(aid, status, role="desk", herdr=None):
+    return {"id": aid, "role": role, "status": status,
+            "metadata": {"herdrState": herdr} if herdr else {}}
+
+
+def test_agent_items_skips_orchestrator():
+    payload = {"agents": [agent("agent-synapse", "working", role="synapse"),
+                          agent("A1", "idle"), agent("A2", "working"),
+                          {"id": "A3"}, "junk"]}
+    assert ys.agent_items(payload) == {"A1": "idle", "A2": "working"}
+    assert ys.agent_items({"agents": None}) == {}
+
+
+def test_agent_items_herdr_waiting_overrides_status():
+    assert ys.agent_items({"agents": [agent("A1", "working", herdr="blocked")]}) == {
+        "A1": "waiting"}
+
+
+def test_ongoing_state_includes_agents():
+    assert ys.ongoing_state({}, agents={"A1": "idle", "A2": "complete"}) == "idle"
+    assert ys.ongoing_state({}, agents={"A1": "working"}) == "thinking"
+    assert ys.ongoing_state({"W1": "working"}, agents={"A1": "waiting"}) == "waiting"
+
+
+def test_agent_finished_transitions():
+    f = ys.AGENT_FINISHED
+    assert ys.finished_since({"A1": "working"}, {"A1": "complete"}, f) == "done"
+    assert ys.finished_since({"A1": "complete"}, {"A1": "complete"}, f) is None
+    assert ys.finished_since({"A1": "working"}, {"A1": "idle"}, f) is None
+
+
+def test_run_with_desk_agents(sources):
+    work = {"items": []}
+    agents = [
+        {"agents": [agent("agent-synapse", "working", role="synapse"),
+                    agent("OLD", "complete"), agent("A1", "idle")]},
+        {"agents": [agent("OLD", "complete"), agent("A1", "working")]},
+        {"agents": [agent("OLD", "complete"), agent("A1", "complete")]},
+    ]
+    polls = []
+
+    class Handler(BaseHTTPRequestHandler):
+        def do_GET(self):
+            if self.path == "/api/agents":
+                body = agents[min(len(polls), len(agents) - 1)]
+                polls.append(self.path)
+            else:
+                body = work
+            data = json.dumps(body).encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(data)
+
+        def log_message(self, *a):
+            pass
+
+    srv = HTTPServer(("127.0.0.1", 0), Handler)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    base = f"http://127.0.0.1:{srv.server_address[1]}"
+
+    history = []
+    real_emit, real_sleep = bus.emit, time.sleep
+
+    def spy(source, state, **kw):
+        history.append((source, state))
+        return real_emit(source, state, **kw)
+
+    def fake_sleep(_s):
+        if len(polls) >= len(agents):
+            raise KeyboardInterrupt
+        real_sleep(0.01)
+
+    ys.bus.emit, ys.time.sleep = spy, fake_sleep
+    try:
+        ys.run(f"{base}/api/work", interval=0.01, blocked=True, verbose=False,
+               agents_url=f"{base}/api/agents")
+    finally:
+        ys.bus.emit, ys.time.sleep = real_emit, real_sleep
+        srv.shutdown()
+
+    # OLD was already complete at start: no bloom for it
+    assert history == [("synapse", "idle"), ("synapse", "thinking"),
+                       ("synapse-events", "done"), ("synapse", "idle")]
+    assert not list(sources.glob("synapse*.json"))
