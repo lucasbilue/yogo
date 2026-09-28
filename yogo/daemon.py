@@ -87,8 +87,15 @@ def render_tool(t: float) -> Frame:
 
 
 def render_waiting(t: float) -> Frame:
-    on = (t * 2.2) % 1.0 < 0.5                             # amber, ~2 Hz
-    return Frame.solid(_hsv(0.11, 1.0, 1.0 if on else 0.10))
+    # Steady dim amber, with the brighter half swapping left/right at ~2 Hz.
+    # Motion rather than a full-screen flash: full brightness was too harsh.
+    left = (t * 2.2) % 1.0 < 0.5
+    f = Frame.solid(_hsv(0.11, 1.0, 0.10))
+    lit = _hsv(0.11, 1.0, 0.35)
+    for x in range(0, 3) if left else range(3, p.WIDTH):
+        for y in range(p.HEIGHT):
+            f[x, y] = lit
+    return f
 
 
 def render_done(t: float) -> Frame:
